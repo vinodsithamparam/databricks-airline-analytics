@@ -1,0 +1,787 @@
+{
+  "datasets": [
+    {
+      "name": "6cb84aa9",
+      "displayName": "Top Fifteen Airports Flight Delay And Performance Metrics",
+      "queryLines": [
+        "SELECT \r\n",
+        "    Total_Scheduled_Flights,\r\n",
+        "    Avg_Departure_Delay_Min,\r\n",
+        "    Avg_Arrival_Delay_Min,\r\n",
+        "    On_Time_Performance_Pct,\r\n",
+        "    Completion_Factor_Pct\r\n",
+        "FROM airline.bts_data.gold_airport_perf\r\n",
+        "ORDER BY Total_Scheduled_Flights DESC\r\n",
+        "LIMIT 15"
+      ]
+    },
+    {
+      "name": "3f1f1695",
+      "displayName": "Carrier Performance and Root Cause Analysis",
+      "queryLines": [
+        "SELECT \r\n",
+        "    Reporting_Airline,\r\n",
+        "    COUNT(*) AS Total_Flights,\r\n",
+        "    SUM(Is_Delayed) AS Total_Delayed_Flights,\r\n",
+        "    ROUND((SUM(Is_Delayed) / COUNT(*)) * 100, 2) AS Delay_Rate_Pct,\r\n",
+        "    ROUND(AVG(DepDelayMinutes), 2) AS Avg_Departure_Delay_Min,\r\n",
+        "    ROUND(AVG(CarrierDelay), 2) AS Avg_Carrier_Delay_Min,\r\n",
+        "    ROUND(AVG(WeatherDelay), 2) AS Avg_Weather_Delay_Min,\r\n",
+        "    ROUND(AVG(NASDelay), 2) AS Avg_NAS_Delay_Min,\r\n",
+        "    ROUND(AVG(SecurityDelay), 2) AS Avg_Security_Delay_Min,\r\n",
+        "    ROUND(AVG(LateAircraftDelay), 2) AS Avg_Late_Aircraft_Delay_Min\r\n",
+        "FROM airline.bts_data.gold_flight_ops\r\n",
+        "GROUP BY Reporting_Airline\r\n",
+        "ORDER BY Delay_Rate_Pct DESC;"
+      ]
+    },
+    {
+      "name": "5e12631e",
+      "displayName": "Route Bottleneck & Network Constraint Identification",
+      "queryLines": [
+        "SELECT \r\n",
+        "    CONCAT(Origin, ' → ', Dest) AS Route,  -- Combined route label\r\n",
+        "    Origin,\r\n",
+        "    Dest,\r\n",
+        "    SUM(Total_Scheduled_Flights) AS Total_Scheduled_Flights,\r\n",
+        "    SUM(Total_Delayed_Flights) AS Total_Delayed_Flights,\r\n",
+        "    ROUND((SUM(Total_Delayed_Flights) / SUM(Total_Scheduled_Flights)) * 100, 2) AS Agg_Delay_Rate_Pct,\r\n",
+        "    ROUND(AVG(Avg_Arrival_Delay_Min), 2) AS Global_Avg_Arrival_Delay_Min\r\n",
+        "FROM airline.bts_data.gold_airport_perf\r\n",
+        "GROUP BY Origin, Dest\r\n",
+        "HAVING Total_Scheduled_Flights >= 1000 -- Filters out low-volume outlier routes\r\n",
+        "ORDER BY Agg_Delay_Rate_Pct DESC\r\n",
+        "LIMIT 10;"
+      ]
+    },
+    {
+      "name": "43bb0464",
+      "displayName": "Weekly Congestion & Ground Efficiency Trends",
+      "queryLines": [
+        "SELECT \r\n",
+        "    CASE DayOfWeek\r\n",
+        "        WHEN 1 THEN 'Sun'\r\n",
+        "        WHEN 2 THEN 'Mon'\r\n",
+        "        WHEN 3 THEN 'Tue'\r\n",
+        "        WHEN 4 THEN 'Wed'\r\n",
+        "        WHEN 5 THEN 'Thu'\r\n",
+        "        WHEN 6 THEN 'Fri'\r\n",
+        "        WHEN 7 THEN 'Sat'\r\n",
+        "    END AS Day_Name,\r\n",
+        "    ROUND(AVG(Avg_TaxiOut_Min), 2) AS Mean_TaxiOut_Min,\r\n",
+        "    ROUND(AVG(Avg_TaxiIn_Min), 2) AS Mean_TaxiIn_Min,\r\n",
+        "    ROUND(AVG(Avg_Departure_Delay_Min), 2) AS Mean_Departure_Delay_Min\r\n",
+        "FROM airline.bts_data.gold_airport_perf\r\n",
+        "GROUP BY DayOfWeek\r\n",
+        "ORDER BY DayOfWeek;"
+      ]
+    },
+    {
+      "name": "2c45576e",
+      "displayName": "Seasonality & Extreme Disruption Trends",
+      "queryLines": [
+        "SELECT \r\n",
+        "    Year,\r\n",
+        "    Month,\r\n",
+        "    CONCAT(Year, '-', LPAD(CAST(Month AS STRING), 2, '0')) AS Year_Month,\r\n",
+        "    SUM(Total_Scheduled_Flights) AS Monthly_Scheduled,\r\n",
+        "    SUM(Total_Cancelled_Flights) AS Monthly_Cancelled,\r\n",
+        "    SUM(Total_Diverted_Flights) AS Monthly_Diverted,\r\n",
+        "    ROUND(AVG(Completion_Factor_Pct), 2) AS Avg_Completion_Factor_Pct\r\n",
+        "FROM airline.bts_data.gold_airport_perf\r\n",
+        "GROUP BY Year, Month\r\n",
+        "ORDER BY Year, Month;"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "c65d4872",
+      "displayName": "US Real Time Dashboard",
+      "layout": [
+        {
+          "widget": {
+            "name": "top-1",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "3f1f1695",
+                  "fields": [
+                    {
+                      "name": "Delay_Rate_Pct",
+                      "expression": "`Delay_Rate_Pct`"
+                    },
+                    {
+                      "name": "Reporting_Airline",
+                      "expression": "`Reporting_Airline`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "showTitle": true,
+                "title": "Top 10 Airlines by Delay Rate (%)",
+                "showDescription": true,
+                "description": "Percentage of total delayed flights ",
+                "headerAlignment": "left"
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "Delay_Rate_Pct",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  },
+                  "displayName": "Delay Rate (%) ",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "Reporting_Airline",
+                  "displayName": "Airline ",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 8,
+            "width": 11,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "stac",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "3f1f1695",
+                  "fields": [
+                    {
+                      "name": "Avg_Weather_Delay_Min",
+                      "expression": "`Avg_Weather_Delay_Min`"
+                    },
+                    {
+                      "name": "Avg_Departure_Delay_Min",
+                      "expression": "`Avg_Departure_Delay_Min`"
+                    },
+                    {
+                      "name": "Avg_Late_Aircraft_Delay_Min",
+                      "expression": "`Avg_Late_Aircraft_Delay_Min`"
+                    },
+                    {
+                      "name": "Avg_Carrier_Delay_Min",
+                      "expression": "`Avg_Carrier_Delay_Min`"
+                    },
+                    {
+                      "name": "Avg_NAS_Delay_Min",
+                      "expression": "`Avg_NAS_Delay_Min`"
+                    },
+                    {
+                      "name": "Avg_Security_Delay_Min",
+                      "expression": "`Avg_Security_Delay_Min`"
+                    },
+                    {
+                      "name": "Reporting_Airline",
+                      "expression": "`Reporting_Airline`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "showTitle": true,
+                "title": "Delay Breakdown ",
+                "showDescription": true,
+                "description": "Visualizes the contributing factors of flight delay  "
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "fields": [
+                    {
+                      "fieldName": "Avg_Weather_Delay_Min",
+                      "displayName": "Weather"
+                    },
+                    {
+                      "fieldName": "Avg_Departure_Delay_Min",
+                      "displayName": "Departure Delay"
+                    },
+                    {
+                      "fieldName": "Avg_Late_Aircraft_Delay_Min",
+                      "displayName": "Late Aircraft"
+                    },
+                    {
+                      "fieldName": "Avg_Carrier_Delay_Min",
+                      "displayName": "Carrier Delay"
+                    },
+                    {
+                      "fieldName": "Avg_NAS_Delay_Min",
+                      "displayName": "NAS Delay"
+                    },
+                    {
+                      "fieldName": "Avg_Security_Delay_Min",
+                      "displayName": "Security Delay"
+                    }
+                  ],
+                  "axis": {
+                    "hideTitle": false,
+                    "title": "Delay (min)"
+                  }
+                },
+                "y": {
+                  "fieldName": "Reporting_Airline",
+                  "displayName": "Airline",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 16,
+            "width": 11,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "92d9318e",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# <span style=\"text-align:center;display:block\"><span style=\"font-family:JetBrains Mono;font-size:48px;line-height:1.5\">**US Airline Delay Analytics&#32;**</span></span>\n",
+                "\n",
+                "# "
+              ],
+              "verticalAlign": "VERTICAL_ALIGN_CENTER"
+            },
+            "specExtensions": {
+              "widgetBackgroundColor": {
+                "light": "#FFFFFF"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 11,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "a67d97ca",
+            "multilineTextboxSpec": {
+              "lines": [
+                "<span style=\"font-size:18px\">Source : Office of Airline Information, Bureau of Transportation Statistics (BTS).</span><br><span style=\"font-size:18px\">Description : Contains scheduled and actual departure and arrival times reported by certified U.S. air carriers that account for at least half of one percent of domestic scheduled passenger revenues.</span><br><span style=\"font-size:18px\">Size of dataset : 3429840 rows X 110 columns</span><br><span style=\"font-size:18px\">Timeline : October 2025 - March 2026</span>\n",
+                "\n",
+                "<span style=\"font-size:18px\">Architecture</span>\n",
+                "\n",
+                "> <span style=\"font-size:18px\">Storage : Amazon S3 Bucket </span><br><span style=\"font-size:18px\">Ingestion : Databricks Pipeline </span><br><span style=\"font-size:18px\">Pre-processing : Medallion Architecture</span><br><span style=\"font-size:18px\">Visualization : Dashboard</span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 11,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "70480b0a",
+            "multilineTextboxSpec": {
+              "lines": [
+                "<span style=\"font-size: 18px;\">📍Pinpoints high-traffic corridors (Origin-to-Destination) that regularly suffer from low on-time performance.</span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 22,
+            "width": 11,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "39fb4bca",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "5e12631e",
+                  "fields": [
+                    {
+                      "name": "Route",
+                      "expression": "`Route`"
+                    },
+                    {
+                      "name": "Agg_Delay_Rate_Pct",
+                      "expression": "`Agg_Delay_Rate_Pct`"
+                    },
+                    {
+                      "name": "Global_Avg_Arrival_Delay_Min",
+                      "expression": "`Global_Avg_Arrival_Delay_Min`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "scatter",
+              "encodings": {
+                "x": {
+                  "fieldName": "Agg_Delay_Rate_Pct",
+                  "displayName": "Delay Rate (%)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "Global_Avg_Arrival_Delay_Min",
+                  "displayName": "Arrival Delay (min)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "Route",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "extra": [
+                  {
+                    "fieldName": "Route"
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 23,
+            "width": 11,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "0f4ebc6c",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "2c45576e",
+                  "fields": [
+                    {
+                      "name": "Year_Month",
+                      "expression": "`Year_Month`"
+                    },
+                    {
+                      "name": "Monthly_Scheduled",
+                      "expression": "`Monthly_Scheduled`"
+                    },
+                    {
+                      "name": "Monthly_Diverted",
+                      "expression": "`Monthly_Diverted`"
+                    },
+                    {
+                      "name": "Monthly_Cancelled",
+                      "expression": "`Monthly_Cancelled`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "Year_Month",
+                  "axis": {
+                    "title": "Month",
+                    "labelAngle": 45,
+                    "hideTitle": true
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "primary": {
+                    "fields": [
+                      {
+                        "fieldName": "Monthly_Scheduled",
+                        "displayName": "Scheduled Flights"
+                      }
+                    ],
+                    "scale": {
+                      "type": "quantitative"
+                    },
+                    "axis": {
+                      "title": "Number of Flights"
+                    }
+                  },
+                  "secondary": {
+                    "fields": [
+                      {
+                        "fieldName": "Monthly_Diverted",
+                        "displayName": "Diverted Flights"
+                      },
+                      {
+                        "fieldName": "Monthly_Cancelled",
+                        "displayName": "Cancelled Flights"
+                      }
+                    ],
+                    "scale": {
+                      "type": "quantitative"
+                    },
+                    "axis": {
+                      "title": "Number of Flights",
+                      "hideTitle": true
+                    }
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 39,
+            "width": 11,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "10813ba5",
+            "multilineTextboxSpec": {
+              "lines": [
+                "<span style=\"font-size: 18px;\">🍂Displays how ground taxi efficiency correlates with overall departure delays.</span><br><span style=\"font-size: 18px;\">🚛If Taxi-Out times spike on specific days, on-ground teams can optimize staff schedules to manage the congestion.</span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 29,
+            "width": 11,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "weekly-congestion-ground-efficiency-trends",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "43bb0464",
+                  "fields": [
+                    {
+                      "name": "Day_Name",
+                      "expression": "`Day_Name`"
+                    },
+                    {
+                      "name": "Mean_TaxiIn_Min",
+                      "expression": "`Mean_TaxiIn_Min`"
+                    },
+                    {
+                      "name": "Mean_TaxiOut_Min",
+                      "expression": "`Mean_TaxiOut_Min`"
+                    },
+                    {
+                      "name": "Mean_Departure_Delay_Min",
+                      "expression": "`Mean_Departure_Delay_Min`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "frame": {
+                "showTitle": true,
+                "title": "Weekly Congestion & Ground Efficiency Trends"
+              },
+              "widgetType": "combo",
+              "encodings": {
+                "x": {
+                  "fieldName": "Day_Name",
+                  "axis": {
+                    "title": "Day of Week"
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "show": false
+                },
+                "y": {
+                  "primary": {
+                    "fields": [
+                      {
+                        "fieldName": "Mean_TaxiIn_Min",
+                        "displayName": "Average Taxi In Delay "
+                      },
+                      {
+                        "fieldName": "Mean_TaxiOut_Min",
+                        "displayName": "Average Taxi Out Delay "
+                      }
+                    ]
+                  },
+                  "secondary": {
+                    "fields": [
+                      {
+                        "fieldName": "Mean_Departure_Delay_Min",
+                        "displayName": "Average Departure Delay"
+                      }
+                    ]
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "axis": {
+                    "hideLabels": false,
+                    "title": "Delay (min)"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 31,
+            "width": 11,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "01950a2b",
+            "multilineTextboxSpec": {
+              "lines": [
+                "<span style=\"font-size:18px\">📈Tracking the monthly correlation between cancelled/diverted flights and the completion factor</span><br><span style=\"font-size:18px\">     Cancelled flights have increased overtime, while the number of scheduled flights have decreased over time, but the spiked since March</span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 37,
+            "width": 11,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "yt",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "2c45576e",
+                  "fields": [
+                    {
+                      "name": "sum(Monthly_Cancelled)",
+                      "expression": "SUM(`Monthly_Cancelled`)"
+                    },
+                    {
+                      "name": "sum(Monthly_Scheduled)",
+                      "expression": "SUM(`Monthly_Scheduled`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "YTD Scheduled Flights"
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(Monthly_Scheduled)",
+                  "style": {
+                    "color": {
+                      "themeColorType": "visualizationColors",
+                      "position": 3
+                    },
+                    "bold": true,
+                    "rules": [
+                      {
+                        "condition": {
+                          "operator": ">="
+                        },
+                        "color": "#00A972"
+                      }
+                    ]
+                  }
+                },
+                "target": {
+                  "fieldName": "sum(Monthly_Cancelled)",
+                  "style": {
+                    "fontSize": 32,
+                    "color": {
+                      "themeColorType": "visualizationColors",
+                      "position": 4
+                    }
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 45,
+            "width": 5,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "average",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "2c45576e",
+                  "fields": [
+                    {
+                      "name": "avg(Avg_Completion_Factor_Pct)",
+                      "expression": "AVG(`Avg_Completion_Factor_Pct`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Average Completion (%)"
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(Avg_Completion_Factor_Pct)",
+                  "style": {
+                    "color": {
+                      "themeColorType": "visualizationColors",
+                      "position": 3
+                    }
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 5,
+            "y": 45,
+            "width": 6,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "893aa944",
+            "multilineTextboxSpec": {
+              "lines": [
+                "<span style=\"font-size:18px\">✈️Highlights airlines with the highest delay rates</span><br>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 7,
+            "width": 11,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "654852b7",
+            "multilineTextboxSpec": {
+              "lines": [
+                "<span style=\"font-size: 18px;\">⏱Visualizes contributing factors to flight delays</span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 14,
+            "width": 11,
+            "height": 2
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    },
+    "applyModeEnabled": false
+  }
+}
